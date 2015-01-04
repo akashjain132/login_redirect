@@ -1,0 +1,75 @@
+<?php
+
+/**
+ * @file
+ * Allows redirects according to an URL parameter after logins.
+ */
+
+use Symfony\Component\HttpFoundation\RedirectResponse;
+use \Drupal\Component\Utility\String;
+use \Drupal\Component\Utility\UrlHelper;
+use \Drupal\Core\Routing\RouteMatchInterface;
+use \Drupal\Core\Form\FormStateInterface;
+use \Drupal\Component\Utility\Xss;
+
+/**
+ * Implements of hook_help().
+ */
+function login_redirect_help($route_name, RouteMatchInterface $route_match) {
+  switch ($route_name) {
+    case 'help.page.login_redirect':
+      $output = '';
+      $output .= '<h3>' . t('About') . '</h3>';
+      $output .= '<p>' . t('A simple solution to allow redirects toward non-Drupal URLs after a successful user login.') . '</p>';
+      $output .= '<h3>' . t('Author(s):') . '</h3>';
+      $output .= '<p>' . t('<a href="@drupal_link">legendm33066</a>', array('@drupal_link' => 'http://drupal.org/user/1290564')) . '</p>';
+      $output .= '<p>' . t('<a href="@drupal_link">akashjain132</a>', array('@drupal_link' => 'http://drupal.org/user/2622667')) . '</p>';
+      $output .= '<h3>' . t('Uses') . '</h3>';
+      $output .= '<p>' . t('Visit the Login page (usually user/login) and append the redirection URL parameter using the parameter name defined in the <a href="@settings">Settings page</a>. For example, if you set the parameter name to "destination", then you would visit user/login?destination=http://www.google.com to have the user redirected to Google (http://www.google.com) after logging in.', array('@settings' => '/admin/config/system/login_redirect')) . '</p>';
+      $output .= '<h3>' . '<font color="red">' . t('Notice') . '</font>' . '</h3>';
+      $output .= '<p>' . '<font color="red">' . t('The URL passed parameter ALWAYS overrides the "destination" parameter handled by Drupal itself.') . '</font>' . '</p>';
+      $output .= '<h3>' . t('Login Redirect administration pages') . '</h3>';
+      $output .= '<ul><li>' . t('<a href="@admin_setting"> Login Redirect Settings </a>', array('@admin_setting' => '/admin/config/system/login_redirect')) . '</li></ul>';
+      return $output;
+
+    break;
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function login_redirect_form_user_login_form_alter(&$form, FormStateInterface $form_state, $form_id) {
+  $config = \Drupal::config('login_redirect.configuration');
+  $status = $config->get('status');
+  $parameter_name = $config->get('parameter_name');
+  $url_query = \Drupal::request()->query->all();
+  if ($status && isset($url_query[$parameter_name])) {
+    $destination = $url_query[$parameter_name];
+    $destination = Xss::filter($destination);
+    $destination = String::checkPlain($destination);
+    if (UrlHelper::isValid($destination)) {
+      $form['login_redirect_destination'] = array(
+        '#type' => 'value',
+        '#value' => $destination,
+      );
+
+      $form['#submit'][] = 'login_redirect_user_login_submit';
+    }
+  }
+}
+
+/**
+ * Send the user to another page.
+ *
+ * Submit handler of user login form.
+ * @see login_redirect_form_FORM_ID_alter().
+ */
+function login_redirect_user_login_submit(&$form, &$form_state) {
+  if (isset($form['login_redirect_destination']['#value'])) {
+    $destination = $form['login_redirect_destination']['#value'];
+    $response = new RedirectResponse($destination, 302);
+    $response->send();
+    return $response;
+  }
+}
